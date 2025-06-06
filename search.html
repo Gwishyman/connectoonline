@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Find Servers - Connecto</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      background: #3a3a3a;
+      color: #eee;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    #topBar {
+      background: #4a4a4a;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    #topBar img {
+      width: 40px;
+      height: 40px;
+      cursor: pointer;
+    }
+    #searchInput {
+      flex: 1;
+      padding: 10px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+    }
+    #results {
+      padding: 16px;
+      overflow-y: auto;
+      flex-grow: 1;
+    }
+    .serverCard {
+      background: #4d4d4d;
+      padding: 12px;
+      margin-bottom: 12px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="topBar">
+    <img src="home.png" onclick="location.href='dashboard.html'" title="Back" />
+    <input type="text" id="searchInput" placeholder="Search servers...">
+  </div>
+  <div id="results">Loading servers...</div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-auth.js";
+    import {
+      getFirestore, collection, getDocs, doc, getDoc
+    } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBLnaC41rCnAEgx3IxaHxWZ1xI3tK_Ja6c",
+      authDomain: "connecto-af6f6.firebaseapp.com",
+      projectId: "connecto-af6f6",
+      storageBucket: "connecto-af6f6.appspot.com",
+      messagingSenderId: "85854295787",
+      appId: "1:85854295787:web:4e1be8c855053e5c0a90ae"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth();
+    const db = getFirestore(app);
+
+    const searchInput = document.getElementById("searchInput");
+    const results = document.getElementById("results");
+
+    let currentUid = null;
+    let allServers = [];
+
+    onAuthStateChanged(auth, async user => {
+      if (!user) return location.href = "login.html";
+      currentUid = user.uid;
+
+      const snapshot = await getDocs(collection(db, "servers"));
+      allServers = [];
+
+      for (const docSnap of snapshot.docs) {
+        const data = docSnap.data();
+        if (data.bannedUsers && data.bannedUsers.includes(currentUid)) continue;
+        allServers.push({ id: docSnap.id, ...data });
+      }
+
+      showServers(allServers);
+    });
+
+    function showServers(list) {
+      results.innerHTML = "";
+      if (list.length === 0) {
+        results.innerHTML = "<p>No servers found.</p>";
+        return;
+      }
+
+      list.forEach(server => {
+        const div = document.createElement("div");
+        div.className = "serverCard";
+        div.textContent = server.name;
+        div.onclick = () => location.href = `server.html?id=${server.id}`;
+        results.appendChild(div);
+      });
+    }
+
+    searchInput.addEventListener("input", () => {
+      const text = searchInput.value.trim().toLowerCase();
+      const filtered = allServers.filter(s => s.name.toLowerCase().includes(text));
+      showServers(filtered);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Connecto Invite</title>
+  <meta property="og:title" content="Join my Connecto Server!">
+  <meta property="og:description" content="Click to join this server on Connecto.">
+  <meta property="og:image" content="https://gwishyman.github.io/connecto/icon.png">
+  <meta property="og:url" content="https://gwishyman.github.io/connecto/invite.html">
+  <meta name="twitter:card" content="summary_large_image">
+  <style>
+    body {
+      background: #2f2f2f;
+      color: #eee;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      text-align: center;
+    }
+    button {
+      background: #4b8ef1;
+      border: none;
+      padding: 10px 20px;
+      color: white;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1 id="serverName">Loading...</h1>
+  <button id="joinBtn" style="display:none">Join Server</button>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js"
+    import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js"
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBLnaC41rCnAEgx3IxaHxWZ1xI3tK_Ja6c",
+      authDomain: "connecto-af6f6.firebaseapp.com",
+      projectId: "connecto-af6f6",
+      storageBucket: "connecto-af6f6.firebasestorage.app",
+      messagingSenderId: "85854295787",
+      appId: "1:85854295787:web:4e1be8c855053e5c0a90ae"
+    }
+
+    const app = initializeApp(firebaseConfig)
+    const db = getFirestore(app)
+
+    const id = new URLSearchParams(location.search).get("id")
+    if (!id) location.href = "404.html"
+
+    const ref = doc(db, "servers", id)
+    const snap = await getDoc(ref)
+
+    if (!snap.exists()) {
+      document.getElementById("serverName").textContent = "Server not found."
+    } else {
+      const name = snap.data().name
+      document.getElementById("serverName").textContent = `Invite to ${name}`
+      const btn = document.getElementById("joinBtn")
+      btn.style.display = "inline-block"
+      btn.onclick = () => location.href = `server.html?id=${id}`
+    }
+  </script>
+</body>
+</html>

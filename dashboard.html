@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Connecto - Server</title>
+  <style>
+    body {
+      margin: 0;
+      background: #2f2f2f;
+      color: #fff;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #topBar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #1f1f1f;
+      padding: 10px 16px;
+    }
+    #topBar img {
+      width: 40px;
+      height: 40px;
+      cursor: pointer;
+    }
+    #serverTitle {
+      font-weight: bold;
+      font-size: 18px;
+    }
+    #messages {
+      flex-grow: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+    }
+    .message {
+      background: #444;
+      padding: 10px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      max-width: 75%;
+      word-wrap: break-word;
+      position: relative;
+      transition: background 0.2s;
+    }
+    .message:hover {
+      background: #555;
+    }
+    .message.self {
+      align-self: flex-end;
+      background: #4b8ef1;
+    }
+    .message .senderRow {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .senderLeft {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .sender {
+      font-weight: bold;
+    }
+    .tag {
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: bold;
+      color: white;
+    }
+    .modTag { background: #4b8ef1; }
+    .adminTag { background: red; }
+    .ownerTag { background: gold; color: black; }
+    .timestamp {
+      font-size: 11px;
+      color: #ccc;
+      margin-left: 8px;
+    }
+    .deleteBtn {
+      display: none;
+      background: red;
+      border: none;
+      color: white;
+      font-size: 12px;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .message:hover .deleteBtn {
+      display: inline-block;
+    }
+    #inputArea {
+      display: flex;
+      padding: 10px;
+      background: #1f1f1f;
+      gap: 10px;
+    }
+    #messageInput {
+      flex: 1;
+      padding: 10px;
+      font-size: 16px;
+      background: #2a2a2a;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      resize: none;
+      max-height: 100px;
+    }
+    #messageInput:disabled {
+      background: #111;
+      color: #777;
+    }
+    #sendBtn, #joinBtn {
+      padding: 10px 16px;
+      font-size: 16px;
+      background: #4b8ef1;
+      border: none;
+      border-radius: 4px;
+      color: white;
+      cursor: pointer;
+    }
+    #sendBtn:disabled {
+      background: #3a6bc9;
+      cursor: not-allowed;
+    }
+    #joinBtn {
+      background: #5cb85c;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="topBar">
+    <img id="homeBtn" src="home.png" />
+    <div id="serverTitle">Loading...</div>
+  </div>
+
+  <div id="messages"></div>
+
+  <div id="inputArea">
+    <textarea id="messageInput" placeholder="Join the server to chat" disabled></textarea>
+    <button id="sendBtn" disabled>Send</button>
+    <button id="joinBtn" style="display:none;">Join Server</button>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js";
+    import {
+      getAuth, onAuthStateChanged
+    } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-auth.js";
+    import {
+      getFirestore, doc, getDoc, updateDoc, arrayUnion,
+      collection, addDoc, onSnapshot, serverTimestamp, query, orderBy, deleteDoc
+    } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js";
+
+    const app = initializeApp({
+      apiKey: "AIzaSyBLnaC41rCnAEgx3IxaHxWZ1xI3tK_Ja6c",
+      authDomain: "connecto-af6f6.firebaseapp.com",
+      projectId: "connecto-af6f6",
+      storageBucket: "connecto-af6f6.appspot.com",
+      messagingSenderId: "85854295787",
+      appId: "1:85854295787:web:4e1be8c855053e5c0a90ae"
+    });
+
+    const auth = getAuth();
+    const db = getFirestore();
+
+    const serverId = new URLSearchParams(location.search).get("id");
+    const homeBtn = document.getElementById("homeBtn");
+    const serverTitle = document.getElementById("serverTitle");
+    const messages = document.getElementById("messages");
+    const messageInput = document.getElementById("messageInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const joinBtn = document.getElementById("joinBtn");
+
+    let currentUser = null;
+    let username = "anon";
+    let isAdmin = false;
+    let isOwner = false;
+    let serverOwnerUid = "";
+    let serverAdmins = [];
+    let isListening = false;
+
+    homeBtn.onclick = () => location.href = "dashboard.html";
+
+    function scrollToBottom() {
+      messages.scrollTop = messages.scrollHeight;
+    }
+
+    function formatTimestamp(ts) {
+      if (!ts) return "";
+      const date = ts.toDate();
+      return `${date.getHours().toString().padStart(2, "0")}:${date.getMinutes().toString().padStart(2, "0")}`;
+    }
+
+    function getRoleTag(uid) {
+      if (uid === currentUser.uid && isOwner) return "ownerTag";
+      if (uid === currentUser.uid && isAdmin) return "adminTag";
+      if (uid === serverOwnerUid || serverAdmins.includes(uid)) return "modTag";
+      return null;
+    }
+
+    function getRoleLabel(uid) {
+      if (uid === currentUser.uid && isOwner) return "OWNER";
+      if (uid === currentUser.uid && isAdmin) return "ADMIN";
+      if (uid === serverOwnerUid || serverAdmins.includes(uid)) return "MOD";
+      return null;
+    }
+
+    function addMessage(id, msg) {
+      const div = document.createElement("div");
+      div.className = "message";
+      if (msg.senderId === currentUser.uid) div.classList.add("self");
+
+      const safeName = msg.senderName.replace(/</g, "&lt;");
+      const safeText = msg.text.replace(/</g, "&lt;");
+      const time = formatTimestamp(msg.timestamp);
+
+      const row = document.createElement("div");
+      row.className = "senderRow";
+
+      const left = document.createElement("div");
+      left.className = "senderLeft";
+
+      const name = document.createElement("div");
+      name.className = "sender";
+      name.textContent = safeName;
+      left.appendChild(name);
+
+      const role = getRoleTag(msg.senderId);
+      const label = getRoleLabel(msg.senderId);
+      if (role && label) {
+        const tag = document.createElement("div");
+        tag.className = `tag ${role}`;
+        tag.textContent = label;
+        left.appendChild(tag);
+      }
+
+      const right = document.createElement("div");
+      right.className = "timestamp";
+      right.textContent = time;
+
+      if (msg.senderId === currentUser.uid || isAdmin || isOwner) {
+        const del = document.createElement("button");
+        del.className = "deleteBtn";
+        del.textContent = "Delete";
+        del.onclick = async () => {
+          await deleteDoc(doc(db, "servers", serverId, "messages", id));
+        };
+        right.appendChild(del);
+      }
+
+      row.appendChild(left);
+      row.appendChild(right);
+
+      div.appendChild(row);
+      div.innerHTML += `<div>${safeText}</div>`;
+
+      messages.appendChild(div);
+      scrollToBottom();
+    }
+
+    async function listenForMessages() {
+      if (isListening) return;
+      isListening = true;
+      const msgRef = collection(db, "servers", serverId, "messages");
+      const q = query(msgRef, orderBy("timestamp"));
+      onSnapshot(q, snap => {
+        messages.innerHTML = "";
+        snap.forEach(doc => addMessage(doc.id, doc.data()));
+      });
+    }
+
+    async function checkJoin(serverDoc) {
+      const data = serverDoc.data();
+      if (!data || !data.members) return false;
+      return data.members.includes(currentUser.uid);
+    }
+
+    async function fetchUserData(uid) {
+      const userDoc = await getDoc(doc(db, "users", uid));
+      if (userDoc.exists()) {
+        const d = userDoc.data();
+        username = d.username || "anon";
+        isAdmin = d.admin === true;
+        isOwner = d.owner === true;
+      }
+    }
+
+    async function loadServer() {
+      const docRef = doc(db, "servers", serverId);
+      const snap = await getDoc(docRef);
+      if (!snap.exists()) {
+        alert("Server not found.");
+        location.href = "dashboard.html";
+        return;
+      }
+      const serverData = snap.data();
+      serverTitle.textContent = serverData.name || "Unnamed Server";
+      serverOwnerUid = serverData.ownerUid;
+      serverAdmins = serverData.admins || [];
+      const isMember = await checkJoin(snap);
+      if (isMember) {
+        enableChat();
+        listenForMessages();
+      } else {
+        joinBtn.style.display = "inline-block";
+      }
+    }
+
+    function enableChat() {
+      messageInput.disabled = false;
+      sendBtn.disabled = false;
+      joinBtn.style.display = "none";
+    }
+
+    joinBtn.onclick = async () => {
+      const ref = doc(db, "servers", serverId);
+      await updateDoc(ref, {
+        members: arrayUnion(currentUser.uid)
+      });
+      enableChat();
+      listenForMessages();
+    };
+
+    sendBtn.onclick = async () => {
+      const text = messageInput.value.trim();
+      if (!text) return;
+      messageInput.value = "";
+      await addDoc(collection(db, "servers", serverId, "messages"), {
+        senderId: currentUser.uid,
+        senderName: username,
+        text,
+        timestamp: serverTimestamp()
+      });
+    };
+
+    messageInput.addEventListener("keydown", e => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        if (!sendBtn.disabled) sendBtn.click();
+      }
+    });
+
+    onAuthStateChanged(auth, async user => {
+      if (!user) {
+        location.href = "login.html";
+        return;
+      }
+      currentUser = user;
+      await fetchUserData(user.uid);
+      await loadServer();
+    });
+  </script>
+</body>
+</html>

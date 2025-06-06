@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Sign Up - Connecto</title>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      background: #2f2f2f;
+      color: #eee;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      font-family: sans-serif;
+    }
+    input, button {
+      margin: 10px;
+      padding: 10px;
+      border-radius: 5px;
+      border: none;
+    }
+    button {
+      background: #4b8ef1;
+      color: white;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h2>Sign Up</h2>
+  <input id="username" placeholder="Username">
+  <input id="email" placeholder="Email">
+  <input id="password" type="password" placeholder="Password">
+  <button id="signupBtn">Create Account</button>
+  <p><a href="login.html" style="color:#bbb">Already have an account?</a></p>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-app.js"
+    import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-auth.js"
+    import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.8.1/firebase-firestore.js"
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBLnaC41rCnAEgx3IxaHxWZ1xI3tK_Ja6c",
+      authDomain: "connecto-af6f6.firebaseapp.com",
+      projectId: "connecto-af6f6",
+      storageBucket: "connecto-af6f6.appspot.com",
+      messagingSenderId: "85854295787",
+      appId: "1:85854295787:web:4e1be8c855053e5c0a90ae"
+    }
+
+    const app = initializeApp(firebaseConfig)
+    const auth = getAuth(app)
+    const db = getFirestore(app)
+
+    document.getElementById("signupBtn").onclick = async () => {
+      const email = document.getElementById("email").value.trim()
+      const password = document.getElementById("password").value
+      const username = document.getElementById("username").value.trim()
+      try {
+        const cred = await createUserWithEmailAndPassword(auth, email, password)
+        await setDoc(doc(db, "users", cred.user.uid), {
+          email: email,
+          username: username,
+          admin: false
+        })
+        location.href = "dashboard.html"
+      } catch (e) {
+        alert(e.message)
+      }
+    }
+  </script>
+</body>
+</html>
